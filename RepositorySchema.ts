@@ -1,8 +1,9 @@
-import { RepositoryRow } from "./RepositoryRow";
+﻿type ArrayBase<T> = T extends (infer R)[] ? R : never;
+export type RowKey<TRow, TKey extends (keyof TRow)[]> = Pick<TRow, ArrayBase<TKey>>;
 
-export interface RepositorySchema<TRowKey, TRow extends TRowKey & RepositoryRow> {
-    readonly keys: string[];
-    readonly columns: string[];
-    createRowKey(): TRowKey;
-    createRow(): TRow;
+export interface RepositorySchema {
+    readonly keys: (number | string | symbol)[];
+    readonly columns: (number | string | symbol)[];
+    getKey(row);
+    createRow();
 }

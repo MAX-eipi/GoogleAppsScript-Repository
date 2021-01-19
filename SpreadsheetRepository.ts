@@ -1,17 +1,30 @@
-import { Repository, ReadOnlyRow } from "./RepositoryInterface";
+import { Repository, SchemaKey, SchemaRow } from "./Repository";
 import { RepositorySchema } from "./RepositorySchema";
-import { RepositoryRow } from "./RepositoryRow";
 
-export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey> implements Repository<TRow, TRowKey> {
-    private _columnBind: { [key: string]: number } = null;
-    private _rows: TRow[] = [];
+type SpreadsheetRow<TSchema extends RepositorySchema> = SchemaRow<TSchema> & {
+    rowId: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export class SpreadsheetRepository<TSchema extends RepositorySchema> implements Repository<TSchema> {
+    private readonly _columns: (keyof SpreadsheetRow<TSchema>)[];
+    private _columnBind: Record<keyof SpreadsheetRow<TSchema>, number> = null;
+    private _rows: SpreadsheetRow<TSchema>[] = [];
     private _rowBind: { [key: string]: number } = {};
 
-    private get columns(): string[] {
-        return this._schema.columns;
+    public constructor(private readonly _sheet: GoogleAppsScript.Spreadsheet.Sheet, private readonly _schema: TSchema) {
+        this._columns = _schema.columns.slice();
+        if (this._columns.indexOf("rowId") === -1) {
+            this._columns.push("rowId");
+        }
+        if (this._columns.indexOf("createdAt") === -1) {
+            this._columns.push("createdAt");
+        }
+        if (this._columns.indexOf("updatedAt") === -1) {
+            this._columns.push("updatedAt");
+        }
     }
-
-    public constructor(private readonly _sheet: GoogleAppsScript.Spreadsheet.Sheet, private readonly _schema: RepositorySchema<TRowKey, TRow>) { }
 
     public initialize(): void {
         this.reload();
@@ -23,7 +36,7 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
         SpreadsheetApp.flush();
         const sheetDatas = this._sheet.getDataRange().getValues();
         if (!this._columnBind) {
-            this._columnBind = {};
+            this._columnBind = {} as Record<keyof SpreadsheetRow<TSchema>, number>;
             const header = sheetDatas[0];
             for (let i = 0; i < header.length; i++) {
                 this._columnBind[header[i]] = i;
@@ -31,8 +44,8 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
         }
         for (let i = 1; i < sheetDatas.length; i++) {
             const row = this._schema.createRow();
-            for (let j = 0; j < this.columns.length; j++) {
-                row[this.columns[j]] = sheetDatas[i][this._columnBind[this.columns[j]]];
+            for (let j = 0; j < this._columns.length; j++) {
+                row[this._columns[j]] = sheetDatas[i][this._columnBind[this._columns[j]]];
             }
             const rowKey = this.createRowKey(sheetDatas[i]);
             const searchKey = this.createSearchKey(rowKey);
@@ -41,40 +54,27 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
         }
     }
 
-    private createRowKey(record: any[]): TRowKey {
-        const rowKey = this._schema.createRowKey();
-        for (const key of this._schema.keys) {
+    private createRowKey(record: any[]): SchemaKey<TSchema> {
+        const rowKey = {} as SchemaKey<TSchema>;
+        for (const key of this._schema.keys as string[]) {
             const index = this._columnBind[key];
             rowKey[key] = record[index];
         }
         return rowKey;
     }
 
-    private createSearchKey(rowKey: TRowKey): string {
-        let searchKey = "";
-        for (const key of this._schema.keys) {
-            if (searchKey) {
-                searchKey += "," + rowKey[key];
-            }
-            else {
-                searchKey = rowKey[key].toString();
-            }
-        }
-        return searchKey;
-    }
-
-    public get rows(): ReadOnlyRow<TRow>[] {
+    public get rows(): Readonly<SchemaRow<TSchema>>[] {
         return this._rows.slice();
     }
 
-    public find(key: TRowKey): ReadOnlyRow<TRow> {
+    public find(key: SchemaKey<TSchema>): SchemaRow<TSchema> {
         const searchKey = this.createSearchKey(key);
         const index = this._rowBind[searchKey];
         return this._rows[index];
     }
 
-    public findAll(keys: TRowKey[]): ReadOnlyRow<TRow>[] {
-        const ret: TRow[] = [];
+    public findAll(keys: SchemaKey<TSchema>[]): SchemaRow<TSchema>[] {
+        const ret: SchemaRow<TSchema>[] = [];
         for (const key of keys) {
             const searchKey = this.createSearchKey(key);
             const index = this._rowBind[searchKey];
@@ -83,41 +83,21 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
         return ret;
     }
 
-    public update(rows: TRow | TRow[]): boolean {
+    public update(rows: SchemaRow<TSchema> | SchemaRow<TSchema>[]) {
         if (!Array.isArray(rows)) {
             rows = [rows];
         }
 
-        const oldRows = this.rows;
-        const oldRowBind = this._rowBind;
-
-        // TODO: ロックを掛ける
-        this.reload();
-
-        const addedRows: TRow[] = [];
-        const updatedRows: { key: string; row: TRow }[] = [];
-        for (const row of rows) {
+        const convertedRows = rows.map(r => this.convertRow(r));
+        const addedRows: SpreadsheetRow<TSchema>[] = [];
+        const updatedRows: { key: string; row: SpreadsheetRow<TSchema> }[] = [];
+        for (const row of convertedRows) {
             const key = this.createSearchKey(row);
             if (key in this._rowBind) {
                 updatedRows.push({ key: key, row: row });
             }
             else {
                 addedRows.push(row);
-            }
-        }
-
-        if (updatedRows.length > 0) {
-            for (const updated of updatedRows) {
-                if (updated.key in oldRowBind) {
-                    const oldRow = oldRows[oldRowBind[updated.key]];
-                    const currentRow = this._rows[this._rowBind[updated.key]];
-                    if (currentRow.updatedAt.getTime() > oldRow.updatedAt.getTime()) {
-                        return false;
-                    }
-                }
-                else {
-                    return false;
-                }
             }
         }
 
@@ -139,6 +119,8 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
         if (addedRows.length > 0) {
             for (const added of addedRows) {
                 added.rowId = this._rows.length + 1;
+                added.createdAt = new Date();
+                added.updatedAt = new Date();
                 const searchKey = this.createSearchKey(added);
                 const rowIndex = this._rows.push(added) - 1;
                 this._rowBind[searchKey] = rowIndex;
@@ -159,15 +141,42 @@ export class SpreadsheetRepository<TRow extends TRowKey & RepositoryRow, TRowKey
                 rawObjects.push(obj);
             }
 
-            this._sheet.getRange(minRowIndex + 2, 1, maxRowIndex - minRowIndex + 1, this.columns.length).setValues(rawObjects);
+            this._sheet.getRange(minRowIndex + 2, 1, maxRowIndex - minRowIndex + 1, this._columns.length).setValues(rawObjects);
         }
 
         return true;
     }
 
-    private toRawObject(row: TRow): any[] {
-        const ret: any[] = new Array(this.columns.length);
-        for (const column of this.columns) {
+    private createSearchKey(rowKey: SchemaKey<TSchema> | SchemaRow<TSchema>): string {
+        let searchKey = "";
+        for (const key of this._schema.keys) {
+            if (searchKey) {
+                searchKey += "," + rowKey[key];
+            }
+            else {
+                searchKey = rowKey[key].toString();
+            }
+        }
+        return searchKey;
+    }
+
+    private convertRow(row: SchemaRow<TSchema>): SpreadsheetRow<TSchema> {
+        const obj = Object.assign({}, row) as SpreadsheetRow<TSchema>;
+        if (obj.rowId === null) {
+            obj.rowId = NaN;
+        }
+        if (obj.createdAt === null) {
+            obj.createdAt = null;
+        }
+        if (obj.updatedAt === null) {
+            obj.updatedAt = null;
+        }
+        return obj as SpreadsheetRow<TSchema>;
+    }
+
+    private toRawObject(row: SpreadsheetRow<TSchema>): any[] {
+        const ret: any[] = new Array(this._columns.length);
+        for (const column of this._columns) {
             ret[this._columnBind[column]] = row[column];
         }
         return ret;
