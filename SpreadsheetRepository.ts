@@ -8,39 +8,27 @@ type SpreadsheetRow<TSchema extends RepositorySchema> = SchemaRow<TSchema> & {
 }
 
 export class SpreadsheetRepository<TSchema extends RepositorySchema> implements Repository<TSchema> {
-    private readonly _columns: (keyof SpreadsheetRow<TSchema>)[];
+    private _columns: (keyof SpreadsheetRow<TSchema>)[];
     private _columnBind: Record<keyof SpreadsheetRow<TSchema>, number> = null;
     private _rows: SpreadsheetRow<TSchema>[] = [];
     private _rowBind: { [key: string]: number } = {};
 
     public constructor(private readonly _sheet: GoogleAppsScript.Spreadsheet.Sheet, private readonly _schema: TSchema) {
-        this._columns = _schema.columns.slice();
-        if (this._columns.indexOf("rowId") === -1) {
-            this._columns.push("rowId");
-        }
-        if (this._columns.indexOf("createdAt") === -1) {
-            this._columns.push("createdAt");
-        }
-        if (this._columns.indexOf("updatedAt") === -1) {
-            this._columns.push("updatedAt");
-        }
     }
 
     public initialize(): void {
         this.reload();
     }
 
-    public reload(): void {
+    public reload(flush = false): void {
         this._rows = [];
         this._rowBind = {};
-        SpreadsheetApp.flush();
+        if (flush) {
+            SpreadsheetApp.flush();
+        }
         const sheetDatas = this._sheet.getDataRange().getValues();
         if (!this._columnBind) {
-            this._columnBind = {} as Record<keyof SpreadsheetRow<TSchema>, number>;
-            const header = sheetDatas[0];
-            for (let i = 0; i < header.length; i++) {
-                this._columnBind[header[i]] = i;
-            }
+            this.initializeColumn(sheetDatas);
         }
         for (let i = 1; i < sheetDatas.length; i++) {
             const row = this._schema.createRow();
@@ -51,6 +39,26 @@ export class SpreadsheetRepository<TSchema extends RepositorySchema> implements 
             const searchKey = this.createSearchKey(rowKey);
             const rowIndex = this._rows.push(row) - 1;
             this._rowBind[searchKey] = rowIndex;
+        }
+    }
+
+    private initializeColumn(sheetDatas: any[][]): void {
+        this._columns = this._schema.columns.slice();
+        const header = sheetDatas[0];
+
+        if (this._columns.indexOf('rowId') === -1 && header.indexOf('rowId') !== -1) {
+            this._columns.push('rowId');
+        }
+        if (this._columns.indexOf('createdAt') === -1 && header.indexOf('createdAt') !== -1) {
+            this._columns.push('createdAt');
+        }
+        if (this._columns.indexOf('updatedAt') === -1 && header.indexOf('updatedAt') !== -1) {
+            this._columns.push('updatedAt');
+        }
+
+        this._columnBind = {} as Record<keyof SpreadsheetRow<TSchema>, number>;
+        for (let i = 0; i < header.length; i++) {
+            this._columnBind[header[i]] = i;
         }
     }
 

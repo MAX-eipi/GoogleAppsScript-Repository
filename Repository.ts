@@ -1,4 +1,4 @@
-﻿import { RepositorySchema } from "../src/RepositorySchema";
+import { RepositorySchema } from "./RepositorySchema";
 
 export type SchemaKey<TSchema extends RepositorySchema> = ReturnType<TSchema['getKey']>;
 export type SchemaRow<TSchema extends RepositorySchema> = Required<ReturnType<TSchema['createRow']>>;
