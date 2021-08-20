@@ -26,7 +26,7 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
         this.initializeRecord(sheetDatas);
     }
 
-    private initializeColumn(sheetDatas: any[][]): void {
+    private initializeColumn(sheetDatas: unknown[][]): void {
         this._columns = this._schema.columns.slice();
         const header = sheetDatas[0];
         if (this._columns.indexOf('createdAt') === -1 && header.indexOf('createdAt') !== -1) {
@@ -38,17 +38,17 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
 
         this._columnBind = {} as Record<keyof SpreadsheetRecord<TRecord>, number>;
         for (let i = 0; i < header.length; i++) {
-            this._columnBind[header[i]] = i;
+            this._columnBind[header[i] as keyof SpreadsheetRecord<TRecord>] = i;
         }
     }
 
-    private initializeRecord(sheetDatas: any[][]): void {
+    private initializeRecord(sheetDatas: unknown[][]): void {
         this._records = [];
         this._recordBind = {};
         for (let i = 1; i < sheetDatas.length; i++) {
             const record = this._schema.instantiateRecord() as SpreadsheetRecord<TRecord>;
             for (let j = 0; j < this._columns.length; j++) {
-                record[this._columns[j]] = sheetDatas[i][this._columnBind[this._columns[j]]];
+                record[this._columns[j] as string] = sheetDatas[i][this._columnBind[this._columns[j]]];
             }
             const recordKey = this.createRecordKey(sheetDatas[i]);
             const searchKey = this.createSearchKey(recordKey);
@@ -57,8 +57,8 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
         }
     }
 
-    private createRecordKey(record: any[]): Pick<TRecord, TRecordKey> {
-        const recordKey = {} as Record<TRecordKey, any>;
+    private createRecordKey(record: unknown[]): Pick<TRecord, TRecordKey> {
+        const recordKey = {} as Record<TRecordKey, unknown>;
         for (const keyColumn of this._schema.keyColumns) {
             const index = this._columnBind[keyColumn];
             recordKey[keyColumn] = record[index];
@@ -123,9 +123,9 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
         }
         if (addedRecords.length > 0) {
             for (const added of addedRecords) {
-                const primaryColumn = this._schema.primaryColumn as keyof SpreadsheetRecord<TRecord>;
+                const primaryColumn = this._schema.primaryColumn as string;
                 if (primaryColumn) {
-                    added[primaryColumn] = this._records.length + 1 as any;
+                    added[primaryColumn] = this._records.length + 1;
                 }
                 added.createdAt = new Date();
                 added.updatedAt = new Date();
@@ -143,7 +143,7 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
         }
 
         if (minRowIndex >= 0 && maxRowIndex >= 0) {
-            const rawObjects: any[][] = [];
+            const rawObjects: unknown[][] = [];
             for (let i = minRowIndex; i <= maxRowIndex; i++) {
                 const obj = this.toRawObject(this._records[i]);
                 rawObjects.push(obj);
@@ -182,8 +182,8 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
         return obj;
     }
 
-    private toRawObject(row: SpreadsheetRecord<TRecord>): any[] {
-        const ret: any[] = new Array(this._columns.length);
+    private toRawObject(row: SpreadsheetRecord<TRecord>): unknown[] {
+        const ret: unknown[] = new Array(this._columns.length);
         for (const column of this._columns) {
             ret[this._columnBind[column]] = row[column];
         }
