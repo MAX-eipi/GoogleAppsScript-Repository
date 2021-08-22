@@ -185,7 +185,7 @@ export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord>
     private toRawObject(row: SpreadsheetRecord<TRecord>): unknown[] {
         const ret: unknown[] = new Array(this._columns.length);
         for (const column of this._columns) {
-            ret[this._columnBind[column]] = row[column];
+            ret[this._columnBind[column]] = typeof row[column] === 'string' ? `'${row[column]}` : row[column];
         }
         return ret;
     }
