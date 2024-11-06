@@ -1,4 +1,4 @@
-export interface DatabaseSchema<TRecord, TRecordKey extends keyof TRecord> {
+interface DatabaseSchema<TRecord, TRecordKey extends keyof TRecord> {
     readonly columns: (keyof TRecord)[];
     readonly keyColumns: TRecordKey[];
     readonly primaryColumn: keyof TRecord;

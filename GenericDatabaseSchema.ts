@@ -1,6 +1,4 @@
-import { DatabaseSchema } from "./DatabaseTableSchema";
-
-export class GenericDatabaseTableSchema<TRecord, TRowKey extends keyof TRecord> implements DatabaseSchema<TRecord, TRowKey> {
+class GenericDatabaseTableSchema<TRecord, TRowKey extends keyof TRecord> implements DatabaseSchema<TRecord, TRowKey> {
     private readonly _factory: () => TRecord;
     private readonly _columns: (keyof TRecord)[];
     private readonly _keyColumns: TRowKey[];

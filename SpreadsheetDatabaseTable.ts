@@ -1,12 +1,4 @@
-import { DatabaseTable } from "./DatabaseTable";
-import { DatabaseSchema } from "./DatabaseTableSchema";
-
-type SpreadsheetRecord<TRecord> = TRecord & {
-    createdAt: Date;
-    updatedAt: Date;
-};
-
-export class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord> implements DatabaseTable<TRecord, TRecordKey> {
+class SpreadsheetDatabaseTable<TRecord, TRecordKey extends keyof TRecord> implements DatabaseTable<TRecord, TRecordKey> {
     private _columns: (keyof SpreadsheetRecord<TRecord>)[];
     private _columnBind: Record<keyof SpreadsheetRecord<TRecord>, number>;
     private _records: SpreadsheetRecord<TRecord>[];

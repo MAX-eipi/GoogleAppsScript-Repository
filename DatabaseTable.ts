@@ -1,6 +1,4 @@
-import { DatabaseSchema } from "./DatabaseTableSchema";
-
-export interface DatabaseTable<TRecord, TRecordKey extends keyof TRecord> {
+interface DatabaseTable<TRecord, TRecordKey extends keyof TRecord> {
     readonly schema: DatabaseSchema<TRecord, TRecordKey>;
     readonly records: TRecord[];
 
